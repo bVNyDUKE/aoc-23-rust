@@ -1,5 +1,7 @@
 use std::{fs, i64};
 
+use tokio::task::JoinSet;
+
 fn convert_value(val: i64, valmap: &Vec<Vec<i64>>) -> i64 {
     for row in valmap {
         let (dest, src, rlen) = (row[0], row[1], row[2]);
@@ -26,7 +28,8 @@ fn parse_map(lines: &Vec<Vec<&str>>, idx: usize) -> Vec<Vec<i64>> {
     x
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let content = fs::read_to_string("src/input.txt").unwrap();
     let (seed_line, maps) = content.split_once("\n").unwrap();
 
@@ -52,7 +55,7 @@ fn main() {
     let humidmap = parse_map(&lines, 5);
     let locmap = parse_map(&lines, 6);
 
-    let seed_location = |seed: i64| -> i64 {
+    let seed_location = |seed: i64| -> i64 + 'static{
         let soil = convert_value(seed, &soilmap);
         let fert = convert_value(soil, &fertmap);
         let water = convert_value(fert, &watermap);
@@ -62,6 +65,27 @@ fn main() {
         let loc = convert_value(hum, &locmap);
         return loc;
     };
+
+    let mut set = JoinSet::new();
+
+    let mut idx = 0;
+    while idx < seeds.len() {
+        let (start, rng) = (seeds[idx], seeds[idx+1]);
+        let end = rng + start;
+        let mid = (start +end) / 2;
+        set.spawn(async move {
+            let mut res = -1;
+            for s in start..mid{
+                let val = seed_location(s);
+                if res == -1 || val < res {
+                    res = val
+                }
+            }
+            res;
+        });
+        idx += 2;
+    }
+
 
     let res = seeds.iter().fold(-1, |acc, &x| {
         let val = seed_location(x);
