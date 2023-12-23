@@ -1,5 +1,4 @@
 use std::{fs, i64};
-
 use tokio::task::JoinSet;
 
 fn convert_value(val: i64, valmap: &Vec<Vec<i64>>) -> i64 {
@@ -25,7 +24,7 @@ fn parse_map(lines: &Vec<Vec<&str>>, idx: usize) -> Vec<Vec<i64>> {
                 .collect()
         })
         .collect();
-    x
+    return x;
 }
 
 #[tokio::main]
@@ -55,7 +54,7 @@ async fn main() {
     let humidmap = parse_map(&lines, 5);
     let locmap = parse_map(&lines, 6);
 
-    let seed_location = |seed: i64| -> i64 + 'static{
+    let seed_location = move |seed: i64| -> i64 {
         let soil = convert_value(seed, &soilmap);
         let fert = convert_value(soil, &fertmap);
         let water = convert_value(fert, &watermap);
@@ -73,29 +72,39 @@ async fn main() {
         let (start, rng) = (seeds[idx], seeds[idx+1]);
         let end = rng + start;
         let mid = (start +end) / 2;
+        let seeds_f = seed_location.clone();
+        let seed_s = seed_location.clone();
         set.spawn(async move {
             let mut res = -1;
             for s in start..mid{
-                let val = seed_location(s);
+                let val = seeds_f(s);
                 if res == -1 || val < res {
                     res = val
                 }
             }
-            res;
+            return res;
+        });
+        set.spawn(async move {
+            let mut res = -1;
+            for s in mid+1..end{
+                let val = seed_s(s);
+                if res == -1 || val < res {
+                    res = val
+                }
+            }
+            return res;
         });
         idx += 2;
     }
 
-
-    let res = seeds.iter().fold(-1, |acc, &x| {
-        let val = seed_location(x);
-        println!("{}", val);
-        if acc == -1 || val < acc {
-            val
-        } else {
-            acc
+    let mut f: i64 = -1;
+    while let Some(val) = set.join_next().await {
+        let c = val.unwrap();
+        if f == -1 || c < f {
+            f = c
         }
-    });
+    }
 
-    println!("res: {}", res)
+    println!("{}", f)
+
 }
